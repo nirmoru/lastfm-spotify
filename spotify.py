@@ -1,6 +1,7 @@
 import requests
 import configparser
-import base64
+import json
+
 
 config = configparser.ConfigParser()
 config.read('config.ini')
@@ -13,7 +14,7 @@ SPOTIFY_ACCESS_TOKEN = config['Spotify']['AccessToken']
 
 
 
-def checkAccessToken(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_ACCESS_TOKEN) -> requests.models.Response:
+def check_access_token(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_ACCESS_TOKEN) -> requests.models.Response:
     auth_url = 'https://api.spotify.com/v1/artists/6sFIWsNpZYqfjUpaCgueju' # Carly Rae Jepsen Artist Page
 
     data = {
@@ -26,15 +27,17 @@ def checkAccessToken(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_ACCESS_TO
         'Authorization' : f'Bearer {SPOTIFY_ACCESS_TOKEN}'
         }
 
-    r = requests.get(auth_url, headers=header)
+    response = requests.get(auth_url, headers=header)
 
-    return r
-
-
-check_access_token = checkAccessToken(SPOTIFY_CLIENT_ID=SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET=SPOTIFY_CLIENT_SECRET, SPOTIFY_ACCESS_TOKEN=SPOTIFY_ACCESS_TOKEN)
+    return response
 
 
-def GenerateAccessToken(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET) -> str:
+access_token_response = check_access_token(  SPOTIFY_CLIENT_ID=SPOTIFY_CLIENT_ID, 
+                                        SPOTIFY_CLIENT_SECRET=SPOTIFY_CLIENT_SECRET, 
+                                        SPOTIFY_ACCESS_TOKEN=SPOTIFY_ACCESS_TOKEN)
+
+
+def generate_access_token(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET) -> str:
     url = 'https://accounts.spotify.com/api/token'
     data = {
         'grant_type': 'client_credentials',
@@ -47,13 +50,39 @@ def GenerateAccessToken(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET) -> str:
 
     return access_token
 
-if check_access_token.status_code != 200: # Checks if the access token is still valid
-    SPOTIFY_ACCESS_TOKEN = GenerateAccessToken(SPOTIFY_CLIENT_ID=SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET=SPOTIFY_CLIENT_SECRET)
+
+if access_token_response.status_code != 200: # Check if the access token is still valid
+    SPOTIFY_ACCESS_TOKEN = generate_access_token(SPOTIFY_CLIENT_ID=SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET=SPOTIFY_CLIENT_SECRET)
     config['Spotify'] = {
         'ClientID' : SPOTIFY_CLIENT_ID,
         'ClientSecret' : SPOTIFY_CLIENT_SECRET,
         'AccessToken': SPOTIFY_ACCESS_TOKEN
-        }
+    }
 
     with open('config.ini', 'w') as configFile:
         config.write(configFile)
+
+
+def get_track_id(TRACK_NAME, ARTIST_NAME, SPOTIFY_ACCESS_TOKEN) -> requests.models.Response:
+    url = 'https://api.spotify.com/v1/search?q=remaster%2520'
+    header = {
+        'Authorization' : f'Bearer {SPOTIFY_ACCESS_TOKEN}'
+    }
+    
+    payload = {
+        'track' : f'{TRACK_NAME}',
+        'artist' : f'{ARTIST_NAME}',
+        'type' : 'track,artist'
+    }
+
+    response = requests.get(url=url, headers=header, params=payload)
+
+    response_json = json.loads(response.text)
+    
+    return response_json['tracks']['items'][0]['id']
+
+    """
+    get_track_id(   TRACK_NAME='Emotion', 
+                    ARTIST_NAME='Carly Rae Jepsen', 
+                    SPOTIFY_ACCESS_TOKEN=SPOTIFY_ACCESS_TOKEN)
+    """
