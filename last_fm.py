@@ -1,51 +1,107 @@
 import requests
-import os
+from bs4 import BeautifulSoup
+import re
 import config_local
-import configparser
 
 
-config = configparser.ConfigParser()
-config.read('config.ini')
+LOGIN_URL = 'https://www.last.fm/login'
+PROTECTED_URL = 'https://www.last.fm/home/tracks'
+REFERRER_URL = 'https://www.last.fm/home/tracks'
+
+WHITE = config_local.WHITE
+RED = config_local.RED
+GREEN = config_local.GREEN
+BLUE = config_local.BLUE
 
 
-def lastfm_get(payload) -> requests.models.Response:
-    url = 'https://ws.audioscrobbler.com/2.0/'
-    headers = {'user-agent': config_local.USER_AGENT}
+def lastfm_login(username=config_local.LASTFM_USERNAME,
+                password=config_local.LASTFM_PASSWORD) -> str:
+    with requests.Session() as session:
+        csrf_token = session.get(url=LOGIN_URL).cookies['csrftoken']
+        payload = {
+            'csrfmiddlewaretoken': csrf_token,
+            'username_or_email': username,
+            'password': password,
+            }
+        
+        head = {
+            "referer": REFERRER_URL
+            }
+        
+        post_request = session.post(LOGIN_URL, 
+                data=payload, 
+                headers=head
+                )
+
+        # An authorised request.
+        response = session.get(url=PROTECTED_URL)
+        html_file = response.text
+        return html_file
 
 
-    payload['api_key'] = config_local.LAST_API_KEY
-    payload['format'] = 'json'
-
-
-    response = requests.get(url=url, headers=headers, params=payload)
-
-    return response
-
-    """Usage
-    payload = {
-    'artist' : 'Carly Rae Jepsen',
-    'album' : 'The Loveliest Time',
-    'method' : 'album.getInfo',url = f"https://www.last.fm/player/station/user/{config_local.LASTFM_USERNAME}/recommended"
-}
-    lastfm_get(payload=payload).json()
-    """
-
-
-def lastfm_get_recommended() -> dict:
-    url = f"https://www.last.fm/player/station/user/{config_local.LASTFM_USERNAME}/recommended"
-
-    response = requests.get(url).json()
-
-    recommended_playlist = response['playlist']
-
-    track_artist_map = {}
-
-    for i, j in enumerate(recommended_playlist):
-        track_artist_map[recommended_playlist[i]['artists'][0]['_name']] = recommended_playlist[i]['_name']
+def lastfm_rec_list(html_file) -> dict[str, str]:
+    soup = BeautifulSoup(html_file, 'html.parser')
+    recs = soup.find_all('li', class_ = 'recs-feed-item--track')
+    result = {}
     
-    return track_artist_map
+    for rec in recs:
+        finds_tracks = rec.find(class_ = 'link-block-target').get_text()
+        find_tracks_filtered = re.sub(r'\(\d*:\d*\)', '', finds_tracks)
+        find_tracks_filtered = re.sub(r'(\s){2,}', '', find_tracks_filtered)
+
+        finds_artist = rec.find(class_ = 'recs-feed-description').get_text().replace('\n', '')
+        find_artist_filtered = re.sub(r'(\d*,){1,}(\d*) (listeners)', '', finds_artist)
+        find_artist_filtered = re.sub(r'(\s){2,}', '', find_artist_filtered).replace('\n', '')
+
+        result[find_artist_filtered] = find_tracks_filtered
+    
+
+    return result
+
+
+def lastfm_check(username=config_local.LASTFM_USERNAME,
+                password=config_local.LASTFM_PASSWORD) -> tuple[bool, str]:
+    if username == '0' or password == '0':
+        return (False, '\033[91mUpdate last.fm credentials at config.ini.\n\033[00m')
+    with requests.Session() as session:
+        csrf_token = session.get(url=LOGIN_URL).cookies['csrftoken']
+        payload = {
+            'csrfmiddlewaretoken': csrf_token,
+            'username_or_email': username,
+            'password': password,
+            }
+        
+        head = {
+            "referer": REFERRER_URL
+            }
+        
+        post_request = session.post(url=LOGIN_URL, 
+                data=payload, 
+                headers=head
+                )
+
+    html_file_post = post_request.text
+    
+    soup = BeautifulSoup(html_file_post, 'html.parser')
+    try:
+        failed_login = soup.find('div', class_ = 'alert-danger').get_text()
+        return (False, '{}Username or password for last.fm is wrong.\n{}'.format(RED, WHITE))
+    except AttributeError:
+        return (True, '{}Login to last.fm is Succesful.\n{}'.format(GREEN, WHITE))
 
 
 
-if __name__ == '__main__':
-    pass
+def main() -> None:
+    lastfm_check_creds = lastfm_check(username=config_local.LASTFM_USERNAME,
+                password=config_local.LASTFM_PASSWORD)
+    if lastfm_check_creds[0] == False:
+        print(lastfm_check_creds[1])
+        exit(0)
+    else:
+        print(lastfm_check_creds[1])
+
+    return None
+
+
+if __name__ =='__main__':
+    main()
