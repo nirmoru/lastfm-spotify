@@ -93,7 +93,7 @@ def get_refresh_token(authentication_token,
                     redirect_uri=config_local.SPOTIFY_REDIRECT_URI) -> str:
     token_url = 'https://accounts.spotify.com/api/token'
     auth_header = base64.urlsafe_b64encode((client_id + ':' + client_secret).encode())
-    headers = {
+    head = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': 'Basic {}'.format(auth_header.decode())
     }
@@ -104,7 +104,7 @@ def get_refresh_token(authentication_token,
         'redirect_uri': redirect_uri,
     }
 
-    access_token_request: str = requests.post(url=token_url, data=payload, headers=headers)
+    access_token_request = requests.post(url=token_url, data=payload, headers=head)
 
     return access_token_request.json()['refresh_token']
 
@@ -114,15 +114,18 @@ def authentication_token(refresh_token=config_local.SPOTIFY_REFRESH_TOKEN) -> re
     client_id = config_local.SPOTIFY_CLIENT_ID
     client_secret = config_local.SPOTIFY_CLIENT_SECRET
     auth_header = base64.urlsafe_b64encode((client_id + ':' + client_secret).encode())
-    headers = {
+
+    head = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'Authorization': 'Basic {}'.format(auth_header.decode())
     }
-    data = {
+    payload = {
         'grant_type': 'refresh_token',
         'refresh_token': refresh_token
     }
-    response = requests.post(url=url, headers=headers, params=data)
+    response = requests.post(url=url, 
+                            headers=head, 
+                            params=payload)
 
     return response
 
@@ -141,12 +144,12 @@ def check_access_token(access_token=config_local.SPOTIFY_ACCESS_TOKEN) -> reques
 
     auth_url = CONST_URL + endpoint
     
-    header = {
+    head = {
         'Authorization': 'Bearer {}'.format(access_token),
         }
 
     response = requests.get(url=auth_url, 
-                            headers=header)
+                            headers=head)
 
     return response
 
@@ -154,14 +157,14 @@ def check_access_token(access_token=config_local.SPOTIFY_ACCESS_TOKEN) -> reques
 def generate_access_token(client_id=config_local.SPOTIFY_CLIENT_ID, 
                         client_secret=config_local.SPOTIFY_CLIENT_SECRET) -> requests.models.Response:
     url = 'https://accounts.spotify.com/api/token'
-    data = {
+    payload = {
         'grant_type': 'client_credentials',
         'client_id': client_id,
         'client_secret': client_secret,
     }
 
     response = requests.post(url=url, 
-                            data=data)
+                            data=payload)
     
     return response
 
@@ -188,7 +191,7 @@ def create_playlist(
     endpoint = 'v1/users/{}/playlists'.format(spotify_userid)
     url = CONST_URL + endpoint
 
-    header = {
+    head = {
             'Authorization': 'Bearer {}'.format(auth_token),
             'Content-Type': 'application/json'
         }
@@ -199,11 +202,9 @@ def create_playlist(
             'public': 'false'
         }
     
-    response = requests.post(
-                        url=url, 
-                        headers=header, 
-                        json=payload
-                    )
+    response = requests.post( url=url, 
+                        headers=head, 
+                        json=payload)
     
     return response
 
@@ -216,15 +217,13 @@ def fetch_playlist(refresh_token=config_local.SPOTIFY_REFRESH_TOKEN,
     endpoint = 'v1/me/playlists?limit=50'.format(spotify_userid)
     url = CONST_URL + endpoint
 
-    header = {
+    head = {
             'Authorization': 'Bearer {}'.format(auth_token),
             'Content-Type': 'application/json'
         }
     
-    response = requests.get(
-                        url= url,
-                        headers=header
-                    )
+    response = requests.get(url= url,
+                        headers=head)
 
     return response
 
@@ -236,11 +235,11 @@ def get_top_items(refresh_token=config_local.SPOTIFY_REFRESH_TOKEN) -> requests.
     endpoint = 'v1/me/top/artists'
     url = CONST_URL + endpoint
 
-    header = {
+    head = {
         'Authorization': 'Bearer {}'.format(auth_token)
     }
 
-    response = requests.get(url=url, headers=header)
+    response = requests.get(url=url, headers=head)
 
     return response
 
@@ -274,6 +273,63 @@ def add_item_to_playlist(track_uri,
         return False
     else:
         return True
+
+
+def get_items_from_playlist(playlist_id=config_local.SPOTIFY_PLAYLISTID,
+                            refresh_token=config_local.SPOTIFY_REFRESH_TOKEN) -> list[str]:
+    auth_token = authentication_token(refresh_token=refresh_token).json()['access_token']
+
+    endpoint = 'v1/playlists/{}/tracks'.format(playlist_id)
+    endpoint_url = CONST_URL + endpoint
+
+    head = {
+        'Authorization': 'Bearer {}'.format(auth_token)
+    }
+
+    response = requests.get(url=endpoint_url,
+                            headers=head)
+    response_json = response.json()
+    
+    result = []
+
+    for _, item in enumerate(response_json['items']):
+        result.append(item['track']['uri'])
+    
+    return result
+
+
+
+
+def del_item_from_playlist(track_uri, 
+                            playlist_id=config_local.SPOTIFY_PLAYLISTID,
+                            refresh_token=config_local.SPOTIFY_REFRESH_TOKEN) -> bool:
+    auth_token = authentication_token(refresh_token=refresh_token).json()['access_token']
+
+    endpoint = 'v1/playlists/{}/tracks'.format(playlist_id)
+    endpoint_url = CONST_URL + endpoint
+
+    head = {
+        'Authorization': 'Bearer {}'.format(auth_token),
+        'Content-Type': 'application/json'
+    }
+
+    payload = {
+        'tracks': [
+            {
+                'uri': track_uri
+            }
+        ]
+    }
+
+    response = requests.delete(url=endpoint_url,
+                                headers=head,
+                                json=payload)
+
+    if response.status_code == 200:
+        return True
+    else:
+        return False
+
     
 
 def get_user_id(refresh_token=config_local.SPOTIFY_REFRESH_TOKEN) -> str:
@@ -308,12 +364,12 @@ def get_track_uri(track_name,
     
     endpoint = 'v1/search?q=remaster%2520track:{}%2520artist:{}&type=track%2Cartist'.format(track_name, artist_name)
     url = CONST_URL + endpoint
-    header = {
+    head = {
         'Authorization' : 'Bearer {}'.format(access_token)
     }
 
     response = requests.get(url=url, 
-                            headers=header)
+                            headers=head)
     
     return response
     """

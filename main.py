@@ -12,6 +12,12 @@ BLUE = config_local.BLUE
 
 
 def add_recs_to_playlist() -> bool:
+    playlist_item_list = spotify.get_items_from_playlist()
+    for _, track_uri in enumerate(playlist_item_list):
+        del_item = spotify.del_item_from_playlist(track_uri=track_uri)
+    
+    print("{}Playlist Flushed.\n{}".format(GREEN, WHITE))
+
     lastfm_rec_html = last_fm.lastfm_login()
     recommendation_list = last_fm.lastfm_rec_list(html_file=lastfm_rec_html)
     
@@ -33,7 +39,7 @@ def main():
     spotify.main()
     last_fm.main()
     rec_print = add_recs_to_playlist()
-    if rec_print == True:
+    if rec_print[0] == True:
         print(rec_print[1])
 
 

@@ -38,7 +38,10 @@ python3 main.py
 * Running ``main.py`` once again will generate a playlist in your spotify account.
 
 # Todo List
-- [ ] Delete items from playlist when adding new items.
+- [X] Ability to fetch recommendation tracks from last.fm.
+- [X] Create spotify playlist.
+- [X] Add tracks to spotify playlist.
+- [X] Delete items from playlist when adding new items.
 
 # Credits
 [@nirmoru](https://github.com/nirmoru)
